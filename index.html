@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SHAPE-5 Digital Twin — Proof of Concept</title>
+<style>
+  :root{
+    --bg:#0e1420; --panel:#161f2e; --panel2:#1b2636; --line:#2a3648;
+    --ink:#e7eef7; --ink2:#93a1b5; --ink3:#5f7086;
+    --ok:#35c98a; --warn:#f2b13c; --bad:#ef5b5b; --info:#5aa2f0;
+    --brand:#6aa8ff; --brandink:#0e1420;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;font-size:15px;line-height:1.45}
+  a{color:var(--brand)}
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 20px 48px}
+
+  /* Top bar */
+  .top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:20px}
+  .brandmark{width:38px;height:38px;border-radius:9px;flex:0 0 auto;
+    background:linear-gradient(135deg,#2a63c8,#6aa8ff);display:grid;place-items:center;
+    font-weight:800;color:#fff;letter-spacing:.5px;font-size:15px}
+  .titles h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+  .titles p{margin:2px 0 0;color:var(--ink2);font-size:12.5px}
+  .top .spacer{flex:1}
+  .clock{font-family:var(--mono);color:var(--ink2);font-size:13px;
+    padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:13px;color:var(--ink);cursor:pointer;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;
+    transition:border-color .15s,background .15s}
+  button:hover{border-color:#3c4d64;background:var(--panel2)}
+  button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  button.primary{background:var(--brand);border-color:var(--brand);color:var(--brandink);font-weight:600}
+  button.primary:hover{filter:brightness(1.06)}
+  button.danger{border-color:#5a2f34}
+  button.danger:hover{background:#2a1a1d;border-color:var(--bad)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:0;border-radius:0;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--panel2);color:var(--brand);font-weight:600}
+
+  /* KPI row */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi .k{color:var(--ink2);font-size:12px}
+  .kpi .v{font-family:var(--mono);font-size:26px;margin-top:6px;letter-spacing:.5px}
+  .kpi .u{color:var(--ink3);font-size:12px;font-family:var(--sans)}
+
+  /* Line strip */
+  .section-h{display:flex;align-items:baseline;gap:10px;margin:22px 2px 10px}
+  .section-h h2{font-size:13px;font-weight:700;letter-spacing:.6px;color:var(--ink2);margin:0;text-transform:uppercase}
+  .section-h span{color:var(--ink3);font-size:12px}
+  .line{display:grid;grid-template-columns:repeat(4,1fr);gap:0;align-items:stretch;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px;position:relative}
+  .node{position:relative;padding:14px 14px 16px;border-radius:9px;margin:6px;background:var(--panel2);
+    border:1px solid var(--line)}
+  .node::after{content:"";position:absolute;right:-13px;top:50%;width:14px;height:2px;background:var(--line);z-index:2}
+  .node:last-child::after{display:none}
+  .node .nm{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 3px rgba(255,255,255,.04)}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)} .dot.idle{background:var(--ink3)}
+  .st{font-size:11.5px;color:var(--ink2);margin-top:2px;font-family:var(--mono)}
+  .bar{height:6px;border-radius:4px;background:#0d1622;margin-top:11px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--brand);width:0%;transition:width .4s ease}
+  .rows{margin-top:11px;display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+  .row{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2)}
+  .row b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+  .lvl{margin-top:12px;font-size:11px;font-weight:700;letter-spacing:.4px;padding:5px 8px;border-radius:6px;text-align:center}
+
+  /* Main grid */
+  .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;margin-top:6px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h3{margin:0 0 4px;font-size:14px;font-weight:700}
+  .card .sub{color:var(--ink2);font-size:12px;margin:0 0 14px}
+  canvas{width:100%;height:210px;display:block}
+  .legend{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--ink2);flex-wrap:wrap}
+  .legend i{display:inline-block;width:20px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+
+  /* Support panel */
+  .scale{display:flex;gap:6px;margin:2px 0 14px}
+  .scale div{flex:1;text-align:center;font-size:10.5px;padding:6px 2px;border-radius:6px;color:var(--ink3);
+    border:1px solid var(--line);background:#0d1622}
+  .scale div.on{color:var(--ink);font-weight:700}
+  .log{height:255px;overflow-y:auto;border-top:1px solid var(--line);margin-top:2px}
+  .ev{display:flex;gap:10px;padding:9px 2px;border-bottom:1px solid #202b3b;font-size:12.5px}
+  .ev time{font-family:var(--mono);color:var(--ink3);flex:0 0 auto;font-size:11.5px}
+  .ev .txt{color:var(--ink)}
+  .ev .tag{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:5px;flex:0 0 auto;height:fit-content}
+
+  .foot{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);color:var(--ink2);font-size:12.5px;line-height:1.6}
+  .foot b{color:var(--ink)}
+
+  @media(max-width:900px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .line{grid-template-columns:repeat(2,1fr)}
+    .node:nth-child(2)::after{display:none}
+    .grid{grid-template-columns:1fr}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brandmark">S5</div>
+    <div class="titles">
+      <h1>SHAPE-5 Digital Twin — Proof of Concept</h1>
+      <p>Live virtual mirror of a manufacturing line, with context-aware adaptive decision support</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="controls">
+      <button id="play" class="primary">Pause</button>
+      <div class="seg" role="group" aria-label="Simulation speed">
+        <button data-speed="1" aria-pressed="false">1×</button>
+        <button data-speed="2" aria-pressed="true">2×</button>
+        <button data-speed="4" aria-pressed="false">4×</button>
+      </div>
+      <button id="fault" class="danger">Inject fault</button>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">Throughput</div><div class="v"><span id="kpiThr">0</span> <span class="u">units/hr</span></div></div>
+    <div class="kpi"><div class="k">Avg. waiting time</div><div class="v"><span id="kpiWait">0</span> <span class="u">s</span></div></div>
+    <div class="kpi"><div class="k">Line utilisation</div><div class="v"><span id="kpiUtil">0</span> <span class="u">%</span></div></div>
+    <div class="kpi"><div class="k">Active support alerts</div><div class="v"><span id="kpiAlerts">0</span> <span class="u">of 4 stations</span></div></div>
+  </div>
+
+  <div class="section-h"><h2>Production line</h2><span>each station is a live twin of a physical workstation</span></div>
+  <div class="line" id="line"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Line telemetry</h3>
+      <p class="sub">Throughput and average machine load over the last minutes</p>
+      <canvas id="chart" width="720" height="210"></canvas>
+      <div class="legend">
+        <span><i style="background:#6aa8ff"></i>Throughput (units/hr)</span>
+        <span><i style="background:#35c98a"></i>Average load (%)</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Adaptive decision support</h3>
+      <p class="sub">The twin raises or lowers support per station from its live context</p>
+      <div class="scale" id="scale">
+        <div data-l="0">Monitor</div>
+        <div data-l="1">Inform</div>
+        <div data-l="2">Warn</div>
+        <div data-l="3">Recommend</div>
+        <div data-l="4">Escalate</div>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>What this is.</b> A digital twin is a live software model of a physical process, driven by sensor data. This proof-of-concept simulates a four-station line and mirrors each station's state, load, temperature, vibration and waiting time in real time. On top of the twin sits the idea proposed in the SHAPE-5 research: instead of a fixed alarm, the system reads each station's context and chooses a proportionate <b>level of support</b> — from quietly monitoring, through informing and warning, up to recommending an action or escalating — and records why each change was made. Use <b>Inject fault</b> to see support escalate as conditions worsen. This is an illustrative simulation, not a validated system.
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $=s=>document.querySelector(s);
+  const LEVELS=["Monitor","Inform","Warn","Recommend","Escalate"];
+  const LVLCOL=["#5f7086","#5aa2f0","#f2b13c","#f2b13c","#ef5b5b"];
+  const LVLBG =["#141d2b","#122236","#241d10","#241d10","#251214"];
+
+  // Station model — each is a twin of a physical workstation
+  function mk(name, base){
+    return {name, state:"running", load:base.load, temp:base.temp, vib:base.vib,
+      queue:base.queue, wait:base.wait, prog:Math.random(), level:0, faultTimer:0};
+  }
+  const START=()=>[
+    mk("Intake / Loading",{load:52,temp:34,vib:1.6,queue:2,wait:8}),
+    mk("CNC Milling",     {load:74,temp:48,vib:3.1,queue:3,wait:14}),
+    mk("Assembly",        {load:63,temp:39,vib:2.2,queue:2,wait:11}),
+    mk("QA & Packaging",  {load:47,temp:33,vib:1.4,queue:1,wait:6}),
+  ];
+  let stations=START();
+  let produced=0, running=true, speed=2, t=0;
+  const thrHist=[], loadHist=[];
+
+  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const now=()=>{const d=new Date();return d.toTimeString().slice(0,8);};
+
+  // Context -> support level (the core proposed idea, in miniature)
+  function decide(s){
+    if(s.state==="fault") return 4;                       // Escalate
+    let score=0;
+    if(s.load>85) score++; if(s.load>95) score++;
+    if(s.temp>55) score++; if(s.temp>68) score++;
+    if(s.vib>5.0) score++; if(s.vib>7.0) score++;
+    if(s.queue>5) score++; if(s.wait>30) score++;
+    if(score<=0) return 0;                                // Monitor
+    if(score===1) return 1;                               // Inform
+    if(score===2) return 2;                               // Warn
+    if(score>=3) return 3;                                // Recommend
+    return 1;
+  }
+  function reason(s){
+    const bits=[];
+    if(s.temp>55) bits.push("temp "+s.temp.toFixed(0)+"\u00B0C");
+    if(s.vib>5.0) bits.push("vibration "+s.vib.toFixed(1)+" mm/s");
+    if(s.load>85) bits.push("load "+s.load.toFixed(0)+"%");
+    if(s.queue>5) bits.push("queue "+s.queue);
+    if(s.wait>30) bits.push("wait "+s.wait.toFixed(0)+"s");
+    return bits.join(", ") || "conditions nominal";
+  }
+  const advice=["","monitoring more closely.","operator informed of rising load.",
+    "suggested: reduce feed rate / rebalance queue.","stop-and-check: maintenance escalation triggered."];
+
+  function log(s, lvl){
+    const box=$("#log");
+    const el=document.createElement("div"); el.className="ev";
+    el.innerHTML='<time>'+now()+'</time>'+
+      '<span class="tag" style="color:'+LVLCOL[lvl]+';background:'+LVLBG[lvl]+'">'+LEVELS[lvl].toUpperCase()+'</span>'+
+      '<span class="txt"><b>'+s.name+'</b> — '+reason(s)+(lvl>=2?'. '+advice[lvl]:'')+'</span>';
+    box.prepend(el);
+    while(box.children.length>40) box.removeChild(box.lastChild);
+  }
+
+  function step(){
+    t++;
+    stations.forEach(s=>{
+      // random-walk telemetry
+      if(s.faultTimer>0){s.faultTimer--; if(s.faultTimer===0){s.state="running";}}
+      const stress = s.state==="fault"?1:0;
+      s.load = clamp(s.load + rnd(-4,4) + stress*6, 20, 100);
+      s.temp = clamp(s.temp + rnd(-1.2,1.2) + (s.load>80?0.9:0) + stress*3, 28, 92);
+      s.vib  = clamp(s.vib  + rnd(-0.5,0.5) + (s.load>85?0.25:0) + stress*1.6, 0.6, 12);
+      s.queue= clamp(Math.round(s.queue + rnd(-1,1.1) + (s.load>88?0.6:0)), 0, 12);
+      s.wait = clamp(s.wait + rnd(-3,3) + s.queue*0.4, 2, 90);
+
+      // state from telemetry
+      if(s.state!=="fault"){
+        if(s.temp>78||s.vib>9.5) s.state="fault";
+        else if(s.load<25) s.state="idle";
+        else s.state="running";
+      }
+      if(s.state==="fault"&&s.faultTimer===0) s.faultTimer=Math.round(rnd(6,12));
+
+      // production
+      if(s.state==="running"){ s.prog += s.load/100*0.18*speed;
+        if(s.prog>=1){ s.prog-=1; produced++; } }
+
+      // decision support
+      const lvl=decide(s);
+      if(lvl!==s.level){ if(lvl>s.level) log(s,lvl); s.level=lvl; }
+    });
+
+    // aggregates
+    const util=Math.round(stations.reduce((a,s)=>a+(s.state==="running"?s.load:0),0)/stations.length);
+    const thr = Math.round(produced/Math.max(t,1)*3600/ (1/ (speed)) /speed); // stable-ish rate
+    const thrInst = Math.round(stations.reduce((a,s)=>a+(s.state==="running"?s.load*0.9:0),0)/4 * 1.4);
+    const wait=Math.round(stations.reduce((a,s)=>a+s.wait,0)/stations.length);
+    const alerts=stations.filter(s=>s.level>=2).length;
+
+    $("#kpiThr").textContent=thrInst;
+    $("#kpiWait").textContent=wait;
+    $("#kpiUtil").textContent=util;
+    $("#kpiAlerts").textContent=alerts;
+
+    thrHist.push(thrInst); loadHist.push(util);
+    if(thrHist.length>90){thrHist.shift();loadHist.shift();}
+
+    render(); drawChart();
+  }
+
+  function render(){
+    const line=$("#line");
+    line.innerHTML="";
+    stations.forEach(s=>{
+      const cls = s.state==="fault"?"bad":s.state==="idle"?"idle":s.level>=2?"warn":"ok";
+      const n=document.createElement("div"); n.className="node";
+      n.innerHTML =
+        '<div class="nm"><span class="dot '+cls+'"></span>'+s.name+'</div>'+
+        '<div class="st">'+s.state.toUpperCase()+' · cycle '+Math.round(s.prog*100)+'%</div>'+
+        '<div class="bar"><i style="width:'+s.load.toFixed(0)+'%"></i></div>'+
+        '<div class="rows">'+
+          '<span class="row">Load <b>'+s.load.toFixed(0)+'%</b></span>'+
+          '<span class="row">Temp <b>'+s.temp.toFixed(0)+'\u00B0C</b></span>'+
+          '<span class="row">Vib <b>'+s.vib.toFixed(1)+'</b></span>'+
+          '<span class="row">Queue <b>'+s.queue+'</b></span>'+
+        '</div>'+
+        '<div class="lvl" style="color:'+LVLCOL[s.level]+';background:'+LVLBG[s.level]+'">'+LEVELS[s.level].toUpperCase()+'</div>';
+      line.appendChild(n);
+    });
+    // support scale highlight = highest current level
+    const top=Math.max(...stations.map(s=>s.level));
+    document.querySelectorAll("#scale div").forEach(d=>{
+      const on=+d.dataset.l===top; d.classList.toggle("on",on);
+      d.style.background=on?LVLBG[top]:""; d.style.borderColor=on?LVLCOL[top]:"";
+      d.style.color=on?LVLCOL[top]:"";
+    });
+  }
+
+  const cv=$("#chart"), cx=cv.getContext("2d");
+  function drawChart(){
+    const w=cv.width,h=cv.height; cx.clearRect(0,0,w,h);
+    // grid
+    cx.strokeStyle="#202b3b"; cx.lineWidth=1;
+    for(let i=0;i<=4;i++){const y=10+i*(h-30)/4;cx.beginPath();cx.moveTo(38,y);cx.lineTo(w-6,y);cx.stroke();
+      cx.fillStyle="#5f7086";cx.font="10px ui-monospace,monospace";cx.fillText(String(100-i*25),8,y+3);}
+    const plot=(arr,color)=>{
+      if(arr.length<2)return;
+      cx.strokeStyle=color;cx.lineWidth=2;cx.beginPath();
+      const n=arr.length, x0=38, xw=w-6-x0, yh=h-30;
+      arr.forEach((v,i)=>{const x=x0+xw*i/(n-1),y=10+yh*(1-clamp(v,0,100)/100);
+        i?cx.lineTo(x,y):cx.moveTo(x,y);});
+      cx.stroke();
+      const lg=cx.createLinearGradient(0,10,0,h-20);
+      lg.addColorStop(0,color+"33");lg.addColorStop(1,color+"00");
+      cx.lineTo(w-6,h-20);cx.lineTo(38,h-20);cx.closePath();cx.fillStyle=lg;cx.fill();
+    };
+    plot(loadHist,"#35c98a");
+    plot(thrHist.map(v=>clamp(v,0,100)),"#6aa8ff");
+  }
+
+  // controls
+  let timer=null;
+  function loop(){ if(running) step(); }
+  function setTimer(){ if(timer)clearInterval(timer); timer=setInterval(loop, 1000/ (speed*0.9)); }
+  $("#play").onclick=e=>{running=!running; e.target.textContent=running?"Pause":"Play";
+    e.target.classList.toggle("primary",running);};
+  document.querySelectorAll("[data-speed]").forEach(b=>b.onclick=()=>{
+    speed=+b.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x=>x.setAttribute("aria-pressed",x===b));
+    setTimer();});
+  $("#fault").onclick=()=>{ const s=stations[1+Math.floor(Math.random()*3)];
+    s.state="fault"; s.faultTimer=Math.round(rnd(7,12)); s.temp=clamp(s.temp+18,28,92); s.vib=clamp(s.vib+4,0.6,12);
+    log(s,4); };
+  $("#reset").onclick=()=>{ stations=START(); produced=0; t=0; thrHist.length=0; loadHist.length=0;
+    $("#log").innerHTML=""; render(); drawChart(); };
+
+  setInterval(()=>{$("#clock").textContent=now();},1000);
+  $("#clock").textContent=now();
+  render(); setTimer();
+})();
+</script>
+</body>
+</html>
